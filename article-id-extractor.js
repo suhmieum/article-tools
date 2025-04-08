@@ -99,22 +99,36 @@ javascript:(function(){
     setIdBanner.style.fontWeight = 'bold';
     setIdBanner.style.backdropFilter = 'blur(2px)'; // 배경 흐림 효과 (모던 브라우저에서만 작동)
     
+    // 공통 버튼 스타일
+    const commonButtonStyle = `
+        background: #fff;
+        color: #3a7bd5;
+        border: 2px solid #3a7bd5;
+        padding: 4px 12px;
+        border-radius: 4px;
+        margin-left: 10px;
+        cursor: pointer;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    `;
+    
     // Set ID가 있는 경우 (SET ID, 복사 기능, 엑셀 다운로드, 재실행 버튼, 닫기 버튼 표시)
     if (setId) {
         setIdBanner.innerHTML = 
             `<span>SET ID: </span>
              <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
              (클릭하여 복사)
-             <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">엑셀 다운로드</button> 
-             <button id="rerunBtnTop" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:10px;cursor:pointer;">재실행</button>
-             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:10px;cursor:pointer;">닫기</button>`;
+             <button id="downloadCsvBtn" style="${commonButtonStyle}">엑셀 다운로드</button> 
+             <button id="rerunBtnTop" style="${commonButtonStyle}">⟲ 재실행</button>
+             <button id="closeBannerBtn" style="${commonButtonStyle}">닫기</button>`;
     } 
     // Set ID가 없는 경우 (재실행 안내 문구와 재실행 버튼 표시)
     else {
         setIdBanner.innerHTML = 
             `<span style="margin-right:15px;color:#ffffff;">문항을 수정하신 경우, '재실행' 버튼을 눌러 다시 추출해주세요.</span>
-             <button id="rerunBtnTop" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-right:10px;cursor:pointer;">재실행</button>
-             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;">닫기</button>`;
+             <button id="rerunBtnTop" style="${commonButtonStyle}">⟲ 재실행</button>
+             <button id="closeBannerBtn" style="${commonButtonStyle}">닫기</button>`;
     }
     
     document.body.appendChild(setIdBanner);
@@ -165,8 +179,9 @@ javascript:(function(){
         });
     }
     
-    // 재실행 버튼 (항상 추가)
-    document.getElementById('rerunBtnTop').addEventListener('click', function() {
+    // 재실행 버튼 (항상 추가) - 글로우 효과 추가
+    const rerunBtn = document.getElementById('rerunBtnTop');
+    rerunBtn.addEventListener('click', function() {
         alert("Article ID를 다시 추출합니다.");
         // 코드 저장 요소에서 북마클릿 코드를 가져와 실행
         if (document.getElementById('article-id-bookmarklet-code')) {
@@ -181,6 +196,19 @@ javascript:(function(){
         } else {
             alert('저장된 북마클릿 코드를 찾을 수 없습니다. 북마클릿을 다시 실행해주세요.');
         }
+    });
+    
+    // 글로우 효과를 위한 이벤트 리스너 추가 (재실행 버튼에만 적용)
+    rerunBtn.addEventListener('mouseover', function() {
+        this.style.background = '#3a7bd5';
+        this.style.color = '#fff';
+        this.style.boxShadow = '0 0 15px rgba(58, 123, 213, 0.6)';
+    });
+    
+    rerunBtn.addEventListener('mouseout', function() {
+        this.style.background = '#fff';
+        this.style.color = '#3a7bd5';
+        this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
     });
     
     // 배너 닫기 버튼 (항상 표시)
