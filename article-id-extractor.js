@@ -6,6 +6,19 @@ javascript:(function(){
         window.existingModalObserver = null;
     }
     
+    // 북마클릿 코드 전체를 페이지에 저장 (재실행용)
+    if (!document.getElementById('article-id-bookmarklet-code')) {
+        const codeStorage = document.createElement('script');
+        codeStorage.id = 'article-id-bookmarklet-code';
+        codeStorage.type = 'text/plain';
+        codeStorage.style.display = 'none';
+        codeStorage.textContent = arguments.callee.toString();
+        document.body.appendChild(codeStorage);
+    } else {
+        // 기존 코드 업데이트
+        document.getElementById('article-id-bookmarklet-code').textContent = arguments.callee.toString();
+    }
+    
     // 전역 변수 설정
     window.lastNetworkSetId = '';
     window.downloadPending = false;
@@ -71,31 +84,42 @@ javascript:(function(){
         console.log(`CSV 파일 다운로드 완료: ${fileName}.csv (${articleIds.length}개 아티클)`);
     }
     
-    // 세트 ID가 있는 경우 상단 배너 생성 (CSV 다운로드 버튼 포함)
+    // 상단 배너 생성
+    const setIdBanner = document.createElement('div');
+    setIdBanner.id = 'article-id-top-banner';
+    setIdBanner.style.position = 'fixed';
+    setIdBanner.style.top = '0';
+    setIdBanner.style.left = '0';
+    setIdBanner.style.width = '100%';
+    setIdBanner.style.background = '#4a90e2';
+    setIdBanner.style.color = 'white';
+    setIdBanner.style.padding = '8px';
+    setIdBanner.style.zIndex = '9999';
+    setIdBanner.style.textAlign = 'center';
+    setIdBanner.style.fontWeight = 'bold';
+    
+    // Set ID가 있는 경우 (SET ID, 복사 기능, 엑셀 다운로드, 재실행 버튼, 닫기 버튼 표시)
     if (setId) {
-        const setIdBanner = document.createElement('div');
-        setIdBanner.id = 'article-id-top-banner';
-        setIdBanner.style.position = 'fixed';
-        setIdBanner.style.top = '0';
-        setIdBanner.style.left = '0';
-        setIdBanner.style.width = '100%';
-        setIdBanner.style.background = '#4a90e2';
-        setIdBanner.style.color = 'white';
-        setIdBanner.style.padding = '8px';
-        setIdBanner.style.zIndex = '9999';
-        setIdBanner.style.textAlign = 'center';
-        setIdBanner.style.fontWeight = 'bold';
-        
         setIdBanner.innerHTML = 
             `<span>SET ID: </span>
              <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
-             (클릭하여 복사) 
+             (클릭하여 복사)
              <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">엑셀 다운로드</button> 
-             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">닫기</button>`;
-        
-        document.body.appendChild(setIdBanner);
-        
-        // 세트 ID 클립보드 복사 기능
+             <button id="rerunBtnTop" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:10px;cursor:pointer;">재실행</button>
+             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:10px;cursor:pointer;">닫기</button>`;
+    } 
+    // Set ID가 없는 경우 (재실행 안내 문구와 재실행 버튼 표시)
+    else {
+        setIdBanner.innerHTML = 
+            `<span style="margin-right:15px;color:#ffffff;">문항 삭제, 추가 이후에는 재실행해주세요.</span>
+             <button id="rerunBtnTop" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-right:10px;cursor:pointer;">재실행</button>
+             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;">닫기</button>`;
+    }
+    
+    document.body.appendChild(setIdBanner);
+    
+    // setId가 있는 경우 복사 기능 추가
+    if (setId) {
         document.getElementById('copyableSetId').addEventListener('click', function() {
             navigator.clipboard.writeText(setId)
                 .then(() => {
@@ -134,17 +158,35 @@ javascript:(function(){
                 return;
             }
             
-            downloadArticleIdsAsCsv(setId, ids);
-        });
-        
-        // 배너 닫기 버튼
-        document.getElementById('closeBannerBtn').addEventListener('click', function() {
-            const banner = document.getElementById('article-id-top-banner');
-            if (banner) {
-                document.body.removeChild(banner);
-            }
+            downloadArticleIdsAsCsv(setId || 'article_ids', ids);
         });
     }
+    
+    // 재실행 버튼 (항상 추가)
+    document.getElementById('rerunBtnTop').addEventListener('click', function() {
+        alert("Article ID를 다시 추출합니다.");
+        // 코드 저장 요소에서 북마클릿 코드를 가져와 실행
+        if (document.getElementById('article-id-bookmarklet-code')) {
+            try {
+                const bookmarkletCode = document.getElementById('article-id-bookmarklet-code').textContent;
+                const bookmarkletFunction = new Function('return ' + bookmarkletCode)();
+                bookmarkletFunction();
+            } catch (e) {
+                console.error('재실행 오류:', e);
+                alert('재실행 중 오류가 발생했습니다. F12를 눌러 콘솔 로그를 확인하세요.');
+            }
+        } else {
+            alert('저장된 북마클릿 코드를 찾을 수 없습니다. 북마클릿을 다시 실행해주세요.');
+        }
+    });
+    
+    // 배너 닫기 버튼 (항상 표시)
+    document.getElementById('closeBannerBtn').addEventListener('click', function() {
+        const banner = document.getElementById('article-id-top-banner');
+        if (banner) {
+            document.body.removeChild(banner);
+        }
+    });
     
     // Fetch API 모니터링 (저장 관련 요청 감지)
     (function() {
@@ -451,5 +493,7 @@ javascript:(function(){
         }
     });
     
-    alert(`${addedCount}개의 Article ID가 표시되었습니다. ID를 클릭하면 복사할 수 있습니다.`);
+    // 알림 메시지 표시
+    const alertMessage = `${addedCount}개의 Article ID가 표시되었습니다. ID를 클릭하면 복사할 수 있습니다.`;
+    alert(alertMessage);
 })();
