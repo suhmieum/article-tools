@@ -385,7 +385,7 @@ javascript:(function(){
                     window.articleIdBookmarkletRunning = false;
                     observeModalAppearance.disconnect();
                     
-                }, 1500);
+                }, 100);
                 
                 return;
             }
