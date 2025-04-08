@@ -31,7 +31,7 @@ javascript:(function(){
         document.body.removeChild(topBanner);
     }
     
-    // 세트 ID 초기화
+    // 세트 ID 초기화 (우측 화면과 같이 작동 시 setId를 사용)
     let setId = '';
     if (containers.length > 0) {
         setId = containers[0].getAttribute('set_id') || '';
@@ -41,9 +41,9 @@ javascript:(function(){
     const processedContainers = new Set();
     let addedCount = 0;
     
-    // CSV 파일로 아티클 ID 다운로드
-    function downloadArticleIdsAsCsv(setId, articleIds) {
-        console.log('다운로드 시작, 파일명:', setId);
+    // CSV 파일로 아티클 ID 다운로드 함수
+    function downloadArticleIdsAsCsv(fileName, articleIds) {
+        console.log('다운로드 시작, 파일명:', fileName);
         
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
         const csvContent = ['순번,id'];
@@ -52,7 +52,7 @@ javascript:(function(){
             if (typeof item === 'object' && item.id) {
                 csvContent.push(`${item.index},${item.id}`);
             } else {
-                csvContent.push(`${idx+1},${item}`);
+                csvContent.push(`${idx + 1},${item}`);
             }
         });
         
@@ -62,16 +62,16 @@ javascript:(function(){
         const url = URL.createObjectURL(blob);
         
         link.setAttribute('href', url);
-        link.setAttribute('download', `${setId || 'article_ids'}.csv`);
+        link.setAttribute('download', `${fileName || 'article_ids'}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        console.log(`CSV 파일 다운로드 완료: ${setId}.csv (${articleIds.length}개 아티클)`);
+        console.log(`CSV 파일 다운로드 완료: ${fileName}.csv (${articleIds.length}개 아티클)`);
     }
     
-    // 세트 ID가 있는 경우 상단 배너 생성
+    // 세트 ID가 있는 경우 상단 배너 생성 (CSV 다운로드 버튼 포함)
     if (setId) {
         const setIdBanner = document.createElement('div');
         setIdBanner.id = 'article-id-top-banner';
@@ -86,24 +86,23 @@ javascript:(function(){
         setIdBanner.style.textAlign = 'center';
         setIdBanner.style.fontWeight = 'bold';
         
-        setIdBanner.innerHTML = `
-            <span>SET ID: </span>
-            <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
-            (클릭하여 복사) 
-            <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">CSV 다운로드</button> 
-            <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">닫기</button>
-        `;
+        setIdBanner.innerHTML = 
+            `<span>SET ID: </span>
+             <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
+             (클릭하여 복사) 
+             <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">CSV 다운로드</button> 
+             <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">닫기</button>`;
         
         document.body.appendChild(setIdBanner);
         
-        // 세트 ID 클립보드 복사
+        // 세트 ID 클립보드 복사 기능
         document.getElementById('copyableSetId').addEventListener('click', function() {
             navigator.clipboard.writeText(setId)
                 .then(() => {
                     alert('Set ID가 클립보드에 복사되었습니다: ' + setId);
                 })
                 .catch(err => {
-                    // 폴백: 클립보드 API가 실패한 경우 document.execCommand 사용
+                    // 폴백: document.execCommand 사용
                     const textArea = document.createElement('textarea');
                     textArea.value = setId;
                     document.body.appendChild(textArea);
@@ -114,10 +113,13 @@ javascript:(function(){
                 });
         });
         
-        // CSV 다운로드 버튼
+        // CSV 다운로드 버튼 (우측 영역에 있는 kv-result-container만 다운)
         document.getElementById('downloadCsvBtn').addEventListener('click', function() {
-            const ids = Array.from(containers).map(container => 
-                container.getAttribute('article_id')).filter(id => id);
+            // 기존 우측 영역 처리: .datas-right.auto 내부의 article id만 선택
+            const rightSideContainers = document.querySelectorAll('.datas-right.auto kv-result-container');
+            const ids = Array.from(rightSideContainers)
+                          .map(container => container.getAttribute('article_id'))
+                          .filter(id => id);
             downloadArticleIdsAsCsv(setId, ids);
         });
         
@@ -130,20 +132,14 @@ javascript:(function(){
         });
     }
     
-    // XHR 요청을 직접 모니터링하는 대신 Fetch API도 모니터링
+    // Fetch API 모니터링 (저장 관련 요청 감지)
     (function() {
-        // 원본 fetch 함수 저장
         const originalFetch = window.fetch;
-        
-        // fetch 오버라이드
         window.fetch = async function() {
             const url = arguments[0];
             const options = arguments[1] || {};
-            
-            // 원본 fetch 호출
             const response = await originalFetch.apply(this, arguments);
             
-            // 저장 관련 URL 패턴 확인 (모든 가능한 패턴)
             if ((typeof url === 'string' && 
                 (url.includes('/sets/save') || 
                  url.includes('setSummaryForSave') || 
@@ -152,38 +148,22 @@ javascript:(function(){
                 (options.method === 'POST' || options.method === 'post')) {
                 
                 console.log('fetch 요청 감지:', url);
-                
-                // 응답 복제 (Response 객체는 한 번만 사용 가능)
                 const clone = response.clone();
-                
-                // 비동기로 응답 처리
                 clone.json().then(data => {
                     console.log('fetch 응답:', data);
-                    
-                    // 응답에서 setsId 찾기 (모든 가능한 경로)
                     let setsId = null;
-                    
-                    // paramData.setsId 경로 확인
                     if (data && data.paramData && data.paramData.setsId) {
                         setsId = data.paramData.setsId;
                         console.log('fetch 응답에서 paramData.setsId 발견:', setsId);
-                    } 
-                    // 최상위 setsId 경로 확인
-                    else if (data && data.setsId) {
+                    } else if (data && data.setsId) {
                         setsId = data.setsId;
                         console.log('fetch 응답에서 setsId 발견:', setsId);
-                    }
-                    // resultData.setsId 경로 확인
-                    else if (data && data.resultData && data.resultData.setsId) {
+                    } else if (data && data.resultData && data.resultData.setsId) {
                         setsId = data.resultData.setsId;
                         console.log('fetch 응답에서 resultData.setsId 발견:', setsId);
                     }
-                    
-                    // setsId 발견한 경우 저장
                     if (setsId) {
                         window.lastNetworkSetId = setsId;
-                        
-                        // 상단 배너 업데이트
                         const copyableSetId = document.getElementById('copyableSetId');
                         if (copyableSetId) {
                             copyableSetId.textContent = window.lastNetworkSetId;
@@ -199,19 +179,16 @@ javascript:(function(){
         };
     })();
     
-    // XMLHttpRequest 인터셉터 (기본적인 XHR도 모니터링)
+    // XMLHttpRequest 인터셉터 (저장 관련 요청 감시)
     (function() {
         const originalOpen = XMLHttpRequest.prototype.open;
         const originalSend = XMLHttpRequest.prototype.send;
-        
         XMLHttpRequest.prototype.open = function() {
             this._url = arguments[1] || '';
             this._method = arguments[0] || '';
             return originalOpen.apply(this, arguments);
         };
-        
         XMLHttpRequest.prototype.send = function() {
-            // 저장 관련 URL 패턴에 해당하는 경우
             if (this._method.toLowerCase() === 'post' && 
                 typeof this._url === 'string' && 
                 (this._url.includes('/sets/save') || 
@@ -220,37 +197,24 @@ javascript:(function(){
                  this._url.includes('/save'))) {
                 
                 console.log('XHR 요청 감지:', this._url);
-                
                 this.addEventListener('load', function() {
                     if (this.responseText) {
                         try {
                             const data = JSON.parse(this.responseText);
                             console.log('XHR 응답:', data);
-                            
-                            // 응답에서 setsId 찾기 (모든 가능한 경로)
                             let setsId = null;
-                            
-                            // paramData.setsId 경로 확인
                             if (data && data.paramData && data.paramData.setsId) {
                                 setsId = data.paramData.setsId;
                                 console.log('XHR 응답에서 paramData.setsId 발견:', setsId);
-                            } 
-                            // 최상위 setsId 경로 확인
-                            else if (data && data.setsId) {
+                            } else if (data && data.setsId) {
                                 setsId = data.setsId;
                                 console.log('XHR 응답에서 setsId 발견:', setsId);
-                            }
-                            // resultData.setsId 경로 확인
-                            else if (data && data.resultData && data.resultData.setsId) {
+                            } else if (data && data.resultData && data.resultData.setsId) {
                                 setsId = data.resultData.setsId;
                                 console.log('XHR 응답에서 resultData.setsId 발견:', setsId);
                             }
-                            
-                            // setsId 발견한 경우 저장
                             if (setsId) {
                                 window.lastNetworkSetId = setsId;
-                                
-                                // 상단 배너 업데이트
                                 const copyableSetId = document.getElementById('copyableSetId');
                                 if (copyableSetId) {
                                     copyableSetId.textContent = window.lastNetworkSetId;
@@ -263,65 +227,70 @@ javascript:(function(){
                     }
                 });
             }
-            
             return originalSend.apply(this, arguments);
         };
     })();
     
-    // 저장 버튼에 직접 이벤트 리스너 추가 (버튼이 존재할 경우)
+    // **[추가] 저장 버튼에 직접 이벤트 리스너 추가 - 이 화면(스마트 문제은행)에서는 저장 버튼 클릭 시
+    // 화면에 있는 모든 kv-result-container(우측에 있는 내용 또는 없으면 전체)를 대상으로 CSV 다운로드 실행**
     const saveButton = document.querySelector('.btn-save');
     if (saveButton) {
-        console.log('저장 버튼 발견, 이벤트 리스너 추가');
-        
+        console.log('저장 버튼 발견, 이벤트 리스너 추가 (화면 내 전체 CSV 다운로드)');
         saveButton.addEventListener('click', function() {
             console.log('저장 버튼 클릭 감지!');
-            
-            // 클릭 시 현재 URL 확인 및 저장
-            const currentUrl = window.location.href;
-            console.log('현재 URL:', currentUrl);
+            // 우측 영역에 kv-result-container가 있다면 그것만, 없으면 전체 컨테이너 대상으로
+            let rightSideContainers = document.querySelectorAll('.datas-right kv-result-container');
+            if (!rightSideContainers.length) {
+                rightSideContainers = document.querySelectorAll('kv-result-container');
+            }
+            console.log('CSV 다운로드 시작, 컨테이너 개수:', rightSideContainers.length);
+            const articleIds = [];
+            rightSideContainers.forEach((container, index) => {
+                const articleId = container.getAttribute('article_id');
+                if (articleId) {
+                    articleIds.push({index: index + 1, id: articleId});
+                }
+            });
+            if (articleIds.length === 0) {
+                alert("저장할 Article ID가 없습니다.");
+                return;
+            }
+            // 파일명: 우측 영역에 제목(data-title)이 있으면 사용, 없으면 기본명
+            let fileName = "article_ids";
+            const dataTitleElement = document.querySelector('.datas-right .data-head .data-title');
+            if (dataTitleElement && dataTitleElement.textContent.trim()) {
+                fileName = dataTitleElement.textContent.trim().replace(/\s/g, '_');
+            }
+            downloadArticleIdsAsCsv(fileName, articleIds);
         });
     }
     
-    // 저장 모달이 나타날 때 세트 ID 캡처 및 CSV 다운로드
+    // 저장 모달 감지 및 CSV 다운로드 (우측 영역 처리)
     const observeModalAppearance = new MutationObserver(function(mutations) {
         if (window.modalFound) return;
-        
         for (const mutation of mutations) {
             if (mutation.type !== 'childList' || !mutation.addedNodes.length) continue;
-            
             for (const node of mutation.addedNodes) {
                 if (node.nodeType !== 1) continue;
-                
-                // 저장 완료 모달 확인 (다양한 선택자 시도)
                 const savePopup = node.querySelector('.save_pop_wrap') || 
                                   (node.classList && node.classList.contains('save_pop_wrap') ? node : null) ||
                                   document.querySelector('.save_pop_wrap');
-                
                 if (!savePopup) continue;
-                
                 console.log('저장 완료 모달 감지!');
                 window.modalFound = true;
-                
                 if (window.downloadPending) continue;
                 window.downloadPending = true;
-                
-                // 모달이 나타난 후 setsId가 업데이트될 시간 확보
+                // 모달 노출 후 약간의 딜레이를 두고 CSV 다운로드 실행
                 setTimeout(function() {
                     console.log('모달 감지 후 타임아웃 실행');
                     console.log('현재 lastNetworkSetId:', window.lastNetworkSetId);
-                    
-                    const rightSideContainers = document.querySelectorAll(
-                        '.datas-right .data-set li kv-result-container, ' + 
-                        '.data-scroll-cover .data-set li kv-result-container'
-                    );
+                    const rightSideContainers = document.querySelectorAll('.datas-right kv-result-container');
                     console.log('컨테이너 개수:', rightSideContainers.length);
-                    
                     if (rightSideContainers.length === 0) {
                         console.log('컨테이너를 찾을 수 없음');
                         window.downloadPending = false;
                         return;
                     }
-                    
                     const articleIds = [];
                     rightSideContainers.forEach((container, index) => {
                         const articleId = container.getAttribute('article_id');
@@ -330,16 +299,12 @@ javascript:(function(){
                         }
                     });
                     console.log('아티클 ID 개수:', articleIds.length);
-                    
                     if (articleIds.length === 0) {
                         console.log('유효한 아티클 ID가 없음');
                         window.downloadPending = false;
                         return;
                     }
-                    
-                    // 파일명으로 사용할 ID 결정
                     let filename = 'article_ids';
-                    
                     if (window.lastNetworkSetId && 
                         (window.lastNetworkSetId.startsWith('MVSP') || 
                          !isNaN(parseInt(window.lastNetworkSetId)))) {
@@ -347,23 +312,15 @@ javascript:(function(){
                         console.log('파일명으로 사용할 ID 결정됨:', filename);
                     } else {
                         console.log('유효한 ID가 없어 기본 파일명 사용');
-                        
-                        // 작업 완료 메시지에서 직접 ID 추출 시도
                         const titleElement = savePopup.querySelector('.title');
                         if (titleElement && titleElement.textContent === '저장 완료') {
                             console.log('저장 완료 타이틀 발견');
-                            
-                            // 직접 ID 추출 시도
                             try {
-                                // 페이지에서 다른 요소에서 ID 찾기 시도
                                 const dataTitle = document.querySelector('.data-title');
                                 if (dataTitle) {
                                     const titleText = dataTitle.textContent;
                                     console.log('데이터 타이틀 발견:', titleText);
-                                    
-                                    // 타이틀에서 몇 가지 패턴으로 ID 추출 시도
                                     if (titleText.includes('_')) {
-                                        // 예: "중학_사회 ①_1-2_형성 평가"
                                         const parts = titleText.split('_');
                                         if (parts.length >= 3) {
                                             filename = parts.join('_').replace(/\s/g, '');
@@ -376,50 +333,34 @@ javascript:(function(){
                             }
                         }
                     }
-                    
-                    // 중복 다운로드 방지를 위해 한 번만 다운로드
                     downloadArticleIdsAsCsv(filename, articleIds);
-                    
-                    // 플래그 재설정 및 옵저버 중지
                     window.downloadPending = false;
                     window.articleIdBookmarkletRunning = false;
                     observeModalAppearance.disconnect();
-                    
                 }, 100);
-                
                 return;
             }
         }
     });
     
-    // DOM 변경 관찰 시작
     observeModalAppearance.observe(document.body, {
         childList: true,
         subtree: true
     });
-    
-    // 참조 저장 (나중에 정리를 위해)
     window.existingModalObserver = observeModalAppearance;
     
-    // 각 container에 Article ID 라벨 추가
+    // 각 container에 Article ID 라벨 추가 (화면 내 각 header에 ID 표시 및 복사 기능)
     containers.forEach((container) => {
         if (processedContainers.has(container)) return;
         processedContainers.add(container);
-        
         const articleId = container.getAttribute('article_id');
         if (!articleId) return;
-        
         try {
             let headerElement = null;
-            
-            // 다양한 DOM 구조에서 헤더 요소 찾기
             const paths = [
                 function() {
                     const closestLi = container.closest('li');
-                    if (closestLi) {
-                        return closestLi.querySelector('.header');
-                    }
-                    return null;
+                    return closestLi ? closestLi.querySelector('.header') : null;
                 },
                 function() {
                     const closestContent = container.closest('.content');
@@ -437,29 +378,19 @@ javascript:(function(){
                 },
                 function() {
                     const dataSet = container.closest('.data-set');
-                    if (dataSet) {
-                        return dataSet.querySelector('.header');
-                    }
-                    return null;
+                    return dataSet ? dataSet.querySelector('.header') : null;
                 }
             ];
-            
-            // 각 경로 시도
             for (let i = 0; i < paths.length; i++) {
                 headerElement = paths[i]();
                 if (headerElement) break;
             }
-            
             if (!headerElement) {
                 console.log(`헤더를 찾을 수 없음: ${articleId}`);
                 return;
             }
-            
-            // 중복 방지
             const existingLabel = headerElement.querySelector(`.article-id-label[data-id="${articleId}"]`);
             if (existingLabel) return;
-            
-            // 라벨 생성 및 스타일링
             const articleSpan = document.createElement('span');
             articleSpan.className = 'article-id-label';
             articleSpan.style.backgroundColor = '#ffde00';
@@ -473,17 +404,13 @@ javascript:(function(){
             articleSpan.textContent = `ID: ${articleId}`;
             articleSpan.title = '클릭하여 복사';
             articleSpan.setAttribute('data-id', articleId);
-            
-            // 클릭 이벤트: ID 복사
             articleSpan.addEventListener('click', function(e) {
                 if (e.stopPropagation) e.stopPropagation();
-                
                 navigator.clipboard.writeText(this.getAttribute('data-id'))
                     .then(() => {
                         alert(`Article ID가 클립보드에 복사되었습니다: ${this.getAttribute('data-id')}`);
                     })
                     .catch(err => {
-                        // 폴백: 클립보드 API가 실패한 경우 document.execCommand 사용
                         const textArea = document.createElement('textarea');
                         textArea.value = this.getAttribute('data-id');
                         document.body.appendChild(textArea);
@@ -493,8 +420,6 @@ javascript:(function(){
                         alert(`Article ID가 클립보드에 복사되었습니다: ${this.getAttribute('data-id')}`);
                     });
             });
-            
-            // DOM에 라벨 추가
             headerElement.appendChild(articleSpan);
             addedCount++;
         } catch (err) {
@@ -502,6 +427,5 @@ javascript:(function(){
         }
     });
     
-    // 초기 알림
     alert(`${addedCount}개의 Article ID가 표시되었습니다. ID를 클릭하면 복사할 수 있습니다.`);
 })();
