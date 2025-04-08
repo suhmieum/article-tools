@@ -16,7 +16,7 @@ javascript:(function(){
     // 기본 변수 설정
     const containers = document.querySelectorAll('kv-result-container');
     if (containers.length === 0) {
-        alert('이 페이지에서는 아티클 ID를 찾을 수 없습니다.');
+        alert('이 페이지에서는 Article ID를 찾을 수 없습니다.');
         window.articleIdBookmarkletRunning = false;
         return;
     }
@@ -46,7 +46,7 @@ javascript:(function(){
         console.log('다운로드 시작, 파일명:', fileName);
         
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-        const csvContent = ['순번,id'];
+        const csvContent = ['순번,Article ID'];
         
         articleIds.forEach((item, idx) => {
             if (typeof item === 'object' && item.id) {
@@ -90,7 +90,7 @@ javascript:(function(){
             `<span>SET ID: </span>
              <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
              (클릭하여 복사) 
-             <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">CSV 다운로드</button> 
+             <button id="downloadCsvBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">엑셀 다운로드</button> 
              <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-left:15px;cursor:pointer;">닫기</button>`;
         
         document.body.appendChild(setIdBanner);
@@ -113,13 +113,27 @@ javascript:(function(){
                 });
         });
         
-        // CSV 다운로드 버튼 (우측 영역에 있는 kv-result-container만 다운)
+        // CSV 다운로드 버튼 (우측 영역 또는 전체 kv-result-container를 대상으로 CSV 다운로드)
         document.getElementById('downloadCsvBtn').addEventListener('click', function() {
-            // 기존 우측 영역 처리: .datas-right.auto 내부의 article id만 선택
-            const rightSideContainers = document.querySelectorAll('.datas-right.auto kv-result-container');
-            const ids = Array.from(rightSideContainers)
-                          .map(container => container.getAttribute('article_id'))
-                          .filter(id => id);
+            // 우선 우측 영역(.datas-right) 내 컨테이너를 찾고, 없으면 전체 컨테이너를 대상으로 함
+            const rightSideContainers = document.querySelectorAll('.datas-right kv-result-container');
+            const containersList = rightSideContainers.length > 0 ? rightSideContainers : document.querySelectorAll('kv-result-container');
+            
+            console.log('다운로드 대상 컨테이너 개수:', containersList.length);
+            const ids = [];
+            
+            containersList.forEach((container, index) => {
+                const articleId = container.getAttribute('article_id');
+                if (articleId) {
+                    ids.push({index: index + 1, id: articleId});
+                }
+            });
+            
+            if (ids.length === 0) {
+                alert("다운로드할 Article ID가 없습니다.");
+                return;
+            }
+            
             downloadArticleIdsAsCsv(setId, ids);
         });
         
@@ -231,41 +245,42 @@ javascript:(function(){
         };
     })();
     
-    // **[추가] 저장 버튼에 직접 이벤트 리스너 추가 - 이 화면(스마트 문제은행)에서는 저장 버튼 클릭 시
-    // 화면에 있는 모든 kv-result-container(우측에 있는 내용 또는 없으면 전체)를 대상으로 CSV 다운로드 실행**
+    // 저장 버튼에 직접 이벤트 리스너 추가
     const saveButton = document.querySelector('.btn-save');
     if (saveButton) {
         console.log('저장 버튼 발견, 이벤트 리스너 추가 (화면 내 전체 CSV 다운로드)');
         saveButton.addEventListener('click', function() {
             console.log('저장 버튼 클릭 감지!');
-            // 우측 영역에 kv-result-container가 있다면 그것만, 없으면 전체 컨테이너 대상으로
-            let rightSideContainers = document.querySelectorAll('.datas-right kv-result-container');
-            if (!rightSideContainers.length) {
-                rightSideContainers = document.querySelectorAll('kv-result-container');
-            }
-            console.log('CSV 다운로드 시작, 컨테이너 개수:', rightSideContainers.length);
+            
+            // 수정: 모든 컨테이너 대상으로 수집 (우측 영역 제한 제거)
+            const allContainers = document.querySelectorAll('kv-result-container');
+            console.log('CSV 다운로드 시작, 컨테이너 개수:', allContainers.length);
+            
             const articleIds = [];
-            rightSideContainers.forEach((container, index) => {
+            allContainers.forEach((container, index) => {
                 const articleId = container.getAttribute('article_id');
                 if (articleId) {
                     articleIds.push({index: index + 1, id: articleId});
                 }
             });
+            
             if (articleIds.length === 0) {
                 alert("저장할 Article ID가 없습니다.");
                 return;
             }
-            // 파일명: 우측 영역에 제목(data-title)이 있으면 사용, 없으면 기본명
+            
+            // 파일명: 데이터 타이틀 사용
             let fileName = "article_ids";
-            const dataTitleElement = document.querySelector('.datas-right .data-head .data-title');
+            const dataTitleElement = document.querySelector('.data-title');
             if (dataTitleElement && dataTitleElement.textContent.trim()) {
                 fileName = dataTitleElement.textContent.trim().replace(/\s/g, '_');
             }
+            
             downloadArticleIdsAsCsv(fileName, articleIds);
         });
     }
     
-    // 저장 모달 감지 및 CSV 다운로드 (우측 영역 처리)
+    // 저장 모달 감지 및 CSV 다운로드
     const observeModalAppearance = new MutationObserver(function(mutations) {
         if (window.modalFound) return;
         for (const mutation of mutations) {
@@ -284,26 +299,34 @@ javascript:(function(){
                 setTimeout(function() {
                     console.log('모달 감지 후 타임아웃 실행');
                     console.log('현재 lastNetworkSetId:', window.lastNetworkSetId);
+                    
+                    // 우측 영역(.datas-right) 내 컨테이너를 찾고, 없으면 전체 컨테이너를 대상으로 함
                     const rightSideContainers = document.querySelectorAll('.datas-right kv-result-container');
-                    console.log('컨테이너 개수:', rightSideContainers.length);
-                    if (rightSideContainers.length === 0) {
+                    const containersList = rightSideContainers.length > 0 ? rightSideContainers : document.querySelectorAll('kv-result-container');
+                    
+                    console.log('컨테이너 개수:', containersList.length);
+                    
+                    if (containersList.length === 0) {
                         console.log('컨테이너를 찾을 수 없음');
                         window.downloadPending = false;
                         return;
                     }
+                    
                     const articleIds = [];
-                    rightSideContainers.forEach((container, index) => {
+                    containersList.forEach((container, index) => {
                         const articleId = container.getAttribute('article_id');
                         if (articleId) {
                             articleIds.push({index: index + 1, id: articleId});
                         }
                     });
+                    
                     console.log('아티클 ID 개수:', articleIds.length);
                     if (articleIds.length === 0) {
                         console.log('유효한 아티클 ID가 없음');
                         window.downloadPending = false;
                         return;
                     }
+                    
                     let filename = 'article_ids';
                     if (window.lastNetworkSetId && 
                         (window.lastNetworkSetId.startsWith('MVSP') || 
@@ -333,6 +356,7 @@ javascript:(function(){
                             }
                         }
                     }
+                    
                     downloadArticleIdsAsCsv(filename, articleIds);
                     window.downloadPending = false;
                     window.articleIdBookmarkletRunning = false;
