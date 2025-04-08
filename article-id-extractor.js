@@ -84,19 +84,20 @@ javascript:(function(){
         console.log(`CSV 파일 다운로드 완료: ${fileName}.csv (${articleIds.length}개 아티클)`);
     }
     
-    // 상단 배너 생성
+    // 상단 배너 생성 - 투명도 적용
     const setIdBanner = document.createElement('div');
     setIdBanner.id = 'article-id-top-banner';
     setIdBanner.style.position = 'fixed';
     setIdBanner.style.top = '0';
     setIdBanner.style.left = '0';
     setIdBanner.style.width = '100%';
-    setIdBanner.style.background = '#4a90e2';
+    setIdBanner.style.background = 'rgba(74, 144, 226, 0.60)'; // 배경색에 알파값 0.60 적용 (약간 투명)
     setIdBanner.style.color = 'white';
     setIdBanner.style.padding = '8px';
     setIdBanner.style.zIndex = '9999';
     setIdBanner.style.textAlign = 'center';
     setIdBanner.style.fontWeight = 'bold';
+    setIdBanner.style.backdropFilter = 'blur(2px)'; // 배경 흐림 효과 (모던 브라우저에서만 작동)
     
     // Set ID가 있는 경우 (SET ID, 복사 기능, 엑셀 다운로드, 재실행 버튼, 닫기 버튼 표시)
     if (setId) {
@@ -111,12 +112,14 @@ javascript:(function(){
     // Set ID가 없는 경우 (재실행 안내 문구와 재실행 버튼 표시)
     else {
         setIdBanner.innerHTML = 
-            `<span style="margin-right:15px;color:#ffffff;">문항 삭제, 추가 이후에는 재실행해주세요.</span>
+            `<span style="margin-right:15px;color:#ffffff;">문항을 수정하신 경우, '재실행' 버튼을 눌러 다시 추출해주세요.</span>
              <button id="rerunBtnTop" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;margin-right:10px;cursor:pointer;">재실행</button>
              <button id="closeBannerBtn" style="background:#fff;color:#333;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;">닫기</button>`;
     }
     
     document.body.appendChild(setIdBanner);
+    
+    // 나머지 코드는 그대로 유지...
     
     // setId가 있는 경우 복사 기능 추가
     if (setId) {
