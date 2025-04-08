@@ -503,5 +503,5 @@ javascript:(function(){
     });
     
     // 초기 알림
-    alert(`${addedCount}개의 Article ID가 표시되었습니다. ID를 클릭하면 복사할 수 있습니다. '내 출제함 저장' 버튼을 클릭하면 저장 완료 시 자동으로 CSV 파일이 다운로드됩니다.`);
+    alert(`${addedCount}개의 Article ID가 표시되었습니다. ID를 클릭하면 복사할 수 있습니다.`);
 })();
