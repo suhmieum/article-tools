@@ -23,8 +23,9 @@ javascript:(function(){
     window.lastNetworkSetId = '';
     window.downloadPending = false;
     window.modalFound = false;
+    window.lastExamNm = '';
     
-    console.log('북마클릿 시작. 버전: 직접 요청 감시');
+    console.log('북마클릿 시작. 버전: 개선된 타이틀 추출');
     
     // 기본 변수 설정
     const containers = document.querySelectorAll('kv-result-container');
@@ -54,9 +55,17 @@ javascript:(function(){
     const processedContainers = new Set();
     let addedCount = 0;
     
+    // 파일명에서 유효하지 않은 문자를 제거하는 함수
+    function sanitizeFileName(fileName) {
+        return fileName.replace(/[\\/:*?"<>|]/g, '_');
+    }
+    
     // CSV 파일로 아티클 ID 다운로드 함수
     function downloadArticleIdsAsCsv(fileName, articleIds) {
         console.log('다운로드 시작, 파일명:', fileName);
+        
+        // 파일명 정리 (유효하지 않은 문자 제거)
+        fileName = sanitizeFileName(fileName);
         
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
         const csvContent = ['순번,Article ID'];
@@ -113,12 +122,107 @@ javascript:(function(){
         transition: all 0.3s ease;
     `;
     
+    // 타이틀 가져오기 (개선된 버전)
+    function getTitle() {
+        // 가능한 모든 타이틀 요소 선택자
+        const selectors = [
+            // 입력 필드 (자료명, 등)
+            '.searchbar .keyword input[type="text"]',
+            '#partTitle', 
+            'input[name="partTitle"]',
+            '.text-box.text_edit input',
+            
+            // 텍스트 요소들
+            '.data-title', 
+            '.data-title button',
+            '.detail-data-title input', 
+            '.data-head .data-title',
+            '.published-detail__header .title',
+            '.header-title .title',
+            '.headerTitle .dataTitle',
+            '.data-title-wrap h3',
+            '.search-form-inner.detail-search-form input',
+            '.header-row.header-title span'
+        ];
+        
+        let titleText = '';
+        let source = '';
+        
+        // 먼저 네트워크 요청에서 캡처된 examNm 확인
+        if (window.lastExamNm) {
+            titleText = window.lastExamNm;
+            console.log('네트워크 요청에서 examNm 발견:', titleText);
+            return titleText;
+        }
+        
+        // 각 선택자에서 타이틀 찾기 시도
+        for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            
+            for (const element of elements) {
+                let text = '';
+                
+                if (element.tagName === 'INPUT') {
+                    text = element.value;
+                } else if (element.tagName === 'BUTTON') {
+                    text = element.textContent;
+                } else {
+                    text = element.textContent;
+                }
+                
+                if (text && text.trim() && text.trim() !== '자료명 *') {
+                    titleText = text.trim();
+                    source = selector;
+                    console.log(`타이틀 발견 (${selector}):`, titleText);
+                    return titleText;
+                }
+            }
+        }
+        
+        // 부분적 일치 - 다양한 HTML 구조 대응
+        if (!titleText) {
+            // 중첩된 구조 처리
+            const nestedElements = [
+                document.querySelector('.data-title'),
+                document.querySelector('.detail-data-title'),
+                document.querySelector('.header-title'),
+                document.querySelector('.headerTitle')
+            ];
+            
+            for (const element of nestedElements) {
+                if (element) {
+                    const input = element.querySelector('input[type="text"]');
+                    if (input && input.value) {
+                        titleText = input.value.trim();
+                        console.log('중첩 구조에서 타이틀 발견:', titleText);
+                        return titleText;
+                    }
+                    
+                    // 텍스트 노드 확인
+                    const textContent = element.textContent.trim();
+                    if (textContent) {
+                        titleText = textContent;
+                        console.log('중첩 구조의 텍스트에서 타이틀 발견:', titleText);
+                        return titleText;
+                    }
+                }
+            }
+        }
+        
+        return titleText;
+    }
+    
+    // 현재 페이지의 타이틀 가져오기
+    const pageTitle = getTitle();
+    
     // Set ID가 있는 경우 (SET ID, 복사 기능, 엑셀 다운로드, 재실행 버튼, 닫기 버튼 표시)
     if (setId) {
         setIdBanner.innerHTML = 
             `<span>SET ID: </span>
              <span id="copyableSetId" style="cursor:pointer;text-decoration:underline;">${setId}</span> 
              (클릭하여 복사)
+             <span style="margin-left:15px;">타이틀: </span>
+             <span id="pageTitleSpan">${pageTitle || '(없음)'}</span>
              <button id="downloadCsvBtn" style="${commonButtonStyle}">엑셀 다운로드</button> 
              <button id="rerunBtnTop" style="${commonButtonStyle}">⟲ 재실행</button>
              <button id="closeBannerBtn" style="${commonButtonStyle}">닫기</button>`;
@@ -127,13 +231,13 @@ javascript:(function(){
     else {
         setIdBanner.innerHTML = 
             `<span style="margin-right:15px;color:#ffffff;">문항을 수정하신 경우, '재실행' 버튼을 눌러 다시 추출해주세요.</span>
+             <span style="margin-left:15px;">타이틀: </span>
+             <span id="pageTitleSpan">${pageTitle || '(없음)'}</span>
              <button id="rerunBtnTop" style="${commonButtonStyle}">⟲ 재실행</button>
              <button id="closeBannerBtn" style="${commonButtonStyle}">닫기</button>`;
     }
     
     document.body.appendChild(setIdBanner);
-    
-    // 나머지 코드는 그대로 유지...
     
     // setId가 있는 경우 복사 기능 추가
     if (setId) {
@@ -175,7 +279,20 @@ javascript:(function(){
                 return;
             }
             
-            downloadArticleIdsAsCsv(setId || 'article_ids', ids);
+            // 페이지 타이틀 가져오기
+            const currentTitle = getTitle();
+            
+            // 파일명 생성: SET ID_타이틀 형식 또는 사용 가능한 옵션
+            let fileName = 'article_ids';
+            if (setId && currentTitle) {
+                fileName = `${setId}_${currentTitle}`;
+            } else if (setId) {
+                fileName = setId;
+            } else if (currentTitle) {
+                fileName = currentTitle;
+            }
+            
+            downloadArticleIdsAsCsv(fileName, ids);
         });
     }
     
@@ -225,6 +342,26 @@ javascript:(function(){
         window.fetch = async function() {
             const url = arguments[0];
             const options = arguments[1] || {};
+            
+            // 저장 요청에 examNm이 있는지 확인 (POST 요청의 본문)
+            if (options && options.body && typeof options.body === 'string') {
+                try {
+                    const bodyData = JSON.parse(options.body);
+                    if (bodyData && bodyData.examNm) {
+                        window.lastExamNm = bodyData.examNm;
+                        console.log('요청 본문에서 examNm 발견:', window.lastExamNm);
+                        
+                        // 타이틀 스팬 업데이트
+                        const titleSpan = document.getElementById('pageTitleSpan');
+                        if (titleSpan) {
+                            titleSpan.textContent = window.lastExamNm;
+                        }
+                    }
+                } catch (e) {
+                    // JSON 파싱 오류는 무시
+                }
+            }
+            
             const response = await originalFetch.apply(this, arguments);
             
             if ((typeof url === 'string' && 
@@ -249,6 +386,19 @@ javascript:(function(){
                         setsId = data.resultData.setsId;
                         console.log('fetch 응답에서 resultData.setsId 발견:', setsId);
                     }
+                    
+                    // examNm 확인
+                    if (data && data.examNm) {
+                        window.lastExamNm = data.examNm;
+                        console.log('fetch 응답에서 examNm 발견:', window.lastExamNm);
+                        
+                        // 타이틀 스팬 업데이트
+                        const titleSpan = document.getElementById('pageTitleSpan');
+                        if (titleSpan) {
+                            titleSpan.textContent = window.lastExamNm;
+                        }
+                    }
+                    
                     if (setsId) {
                         window.lastNetworkSetId = setsId;
                         const copyableSetId = document.getElementById('copyableSetId');
@@ -276,6 +426,25 @@ javascript:(function(){
             return originalOpen.apply(this, arguments);
         };
         XMLHttpRequest.prototype.send = function() {
+            // 요청 본문에서 examNm 확인
+            if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].includes('examNm')) {
+                try {
+                    const bodyData = JSON.parse(arguments[0]);
+                    if (bodyData && bodyData.examNm) {
+                        window.lastExamNm = bodyData.examNm;
+                        console.log('XHR 요청 본문에서 examNm 발견:', window.lastExamNm);
+                        
+                        // 타이틀 스팬 업데이트
+                        const titleSpan = document.getElementById('pageTitleSpan');
+                        if (titleSpan) {
+                            titleSpan.textContent = window.lastExamNm;
+                        }
+                    }
+                } catch (e) {
+                    // JSON 파싱 오류는 무시
+                }
+            }
+            
             if (this._method.toLowerCase() === 'post' && 
                 typeof this._url === 'string' && 
                 (this._url.includes('/sets/save') || 
@@ -300,6 +469,19 @@ javascript:(function(){
                                 setsId = data.resultData.setsId;
                                 console.log('XHR 응답에서 resultData.setsId 발견:', setsId);
                             }
+                            
+                            // examNm 확인
+                            if (data && data.examNm) {
+                                window.lastExamNm = data.examNm;
+                                console.log('XHR 응답에서 examNm 발견:', window.lastExamNm);
+                                
+                                // 타이틀 스팬 업데이트
+                                const titleSpan = document.getElementById('pageTitleSpan');
+                                if (titleSpan) {
+                                    titleSpan.textContent = window.lastExamNm;
+                                }
+                            }
+                            
                             if (setsId) {
                                 window.lastNetworkSetId = setsId;
                                 const copyableSetId = document.getElementById('copyableSetId');
@@ -325,6 +507,19 @@ javascript:(function(){
         saveButton.addEventListener('click', function() {
             console.log('저장 버튼 클릭 감지!');
             
+            // 자료명 입력 필드에서 타이틀 확인 (저장 시점에 최신 타이틀 가져오기)
+            const titleInput = document.querySelector('.searchbar .keyword input[type="text"]');
+            if (titleInput && titleInput.value.trim()) {
+                window.lastExamNm = titleInput.value.trim();
+                console.log('저장 버튼 클릭 시 자료명에서 타이틀 발견:', window.lastExamNm);
+                
+                // 타이틀 스팬 업데이트
+                const titleSpan = document.getElementById('pageTitleSpan');
+                if (titleSpan) {
+                    titleSpan.textContent = window.lastExamNm;
+                }
+            }
+            
             // 수정: 모든 컨테이너 대상으로 수집 (우측 영역 제한 제거)
             const allContainers = document.querySelectorAll('kv-result-container');
             console.log('CSV 다운로드 시작, 컨테이너 개수:', allContainers.length);
@@ -342,11 +537,23 @@ javascript:(function(){
                 return;
             }
             
-            // 파일명: 데이터 타이틀 사용
+            // 파일명: SET ID_타이틀 형식으로 설정
             let fileName = "article_ids";
-            const dataTitleElement = document.querySelector('.data-title');
-            if (dataTitleElement && dataTitleElement.textContent.trim()) {
-                fileName = dataTitleElement.textContent.trim().replace(/\s/g, '_');
+            
+            // 현재 SET ID 확인
+            const currentSetId = window.lastNetworkSetId || 
+                                (allContainers.length > 0 ? allContainers[0].getAttribute('set_id') : '');
+            
+            // 현재 타이틀 확인 (네트워크 요청에서 캡처된 타이틀 우선)
+            const currentTitle = window.lastExamNm || getTitle();
+            
+            // 파일명 생성 로직
+            if (currentSetId && currentTitle) {
+                fileName = `${currentSetId}_${currentTitle}`;
+            } else if (currentSetId) {
+                fileName = currentSetId;
+            } else if (currentTitle) {
+                fileName = currentTitle;
             }
             
             downloadArticleIdsAsCsv(fileName, articleIds);
@@ -400,32 +607,56 @@ javascript:(function(){
                         return;
                     }
                     
+                    // 타이틀과 SET ID를 결합한 파일명 생성
                     let filename = 'article_ids';
+                    
+                    // 네트워크 요청에서 캡처된 타이틀 우선 사용
+                    const currentTitle = window.lastExamNm || getTitle();
+                    
                     if (window.lastNetworkSetId && 
                         (window.lastNetworkSetId.startsWith('MVSP') || 
                          !isNaN(parseInt(window.lastNetworkSetId)))) {
-                        filename = window.lastNetworkSetId;
-                        console.log('파일명으로 사용할 ID 결정됨:', filename);
+                        
+                        // SET ID와 타이틀 모두 있는 경우
+                        if (currentTitle) {
+                            filename = `${window.lastNetworkSetId}_${currentTitle}`;
+                        } else {
+                            filename = window.lastNetworkSetId;
+                        }
+                        console.log('파일명으로 ID와 타이틀 결정됨:', filename);
                     } else {
-                        console.log('유효한 ID가 없어 기본 파일명 사용');
-                        const titleElement = savePopup.querySelector('.title');
-                        if (titleElement && titleElement.textContent === '저장 완료') {
-                            console.log('저장 완료 타이틀 발견');
+                        console.log('유효한 ID가 없어 타이틀 또는 기본 파일명 사용');
+                        if (currentTitle) {
+                            filename = currentTitle;
+                        } else {
+                            // 기존 로직: 타이틀에서 파일명 추출 시도
                             try {
-                                const dataTitle = document.querySelector('.data-title');
-                                if (dataTitle) {
-                                    const titleText = dataTitle.textContent;
-                                    console.log('데이터 타이틀 발견:', titleText);
-                                    if (titleText.includes('_')) {
-                                        const parts = titleText.split('_');
-                                        if (parts.length >= 3) {
-                                            filename = parts.join('_').replace(/\s/g, '');
-                                            console.log('타이틀에서 추출한 ID:', filename);
+                                // 여러 타이틀 소스 시도
+                                const dataTitleElements = [
+                                    document.querySelector('.data-title'),
+                                    document.querySelector('.header-title .title'),
+                                    document.querySelector('.published-detail__header .title'),
+                                    document.querySelector('#partTitle')
+                                ];
+                                
+                                for (const element of dataTitleElements) {
+                                    if (element) {
+                                        let titleText = '';
+                                        if (element.tagName === 'INPUT') {
+                                            titleText = element.value;
+                                        } else {
+                                            titleText = element.textContent;
+                                        }
+                                        
+                                        if (titleText && titleText.trim()) {
+                                            filename = titleText.trim();
+                                            console.log('요소에서 추출한 타이틀:', filename);
+                                            break;
                                         }
                                     }
                                 }
                             } catch (e) {
-                                console.log('ID 추출 실패:', e);
+                                console.log('타이틀 추출 실패:', e);
                             }
                         }
                     }
