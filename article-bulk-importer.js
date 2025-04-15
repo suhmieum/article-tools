@@ -36,7 +36,7 @@ javascript:(function(){
     if (clickedCount > 0) {
         // 상황에 따른 메시지
         if (buttonsToClick < addButtons.length) {
-            alert(`총 ${clickedCount}개 문항 추가를 시도합니다.\n\n※ 최대 50개까지만 추가 가능하여 일부 문항만 처리했습니다.`);
+            alert(`총 ${clickedCount}개 문항 추가를 시도합니다.\n\n※ 최대 50개까지만 추가 가능하여 일부 문항만 시도합니다.`);
         } else {
             alert(`총 ${clickedCount}개 문항 추가를 시도합니다.`);
         }
